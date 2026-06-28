@@ -3,9 +3,13 @@ title: "How plugins work"
 description: "The pipeline, the hooks, and where your code runs."
 ---
 
-A plugin is a TypeScript package that taps into Freestyle's dictation pipeline. You can rewrite transcripts, tweak the AI cleanup, react to events, reroute output, and add pages inside the app.
+Plugins are custom services that you build that live inside of Freestyle's dictation pipeline. Some of the things that you can do with plugins, just to throw some ideas out there. 
 
-## Two processes
+- Rewrite transcriptions on each step. Do some custom modifications that Freestyle as is cannot do.
+- Tweak the post-processing feed-up step whatever way that you like. 
+- Reroute the output. Send transcriptions to any external service of your own. 
+
+## An overview of Freestyle's Stack
 
 - The **server** owns transcription, cleanup, settings, and the plugin database. Most hooks run here.
 - The **app** (the Electron client) owns audio capture, the UI, and delivering text to your window. A couple of hooks run here.
@@ -38,7 +42,7 @@ User presses hotkey
 Text appears in your focused app
 ```
 
-When several plugins share a hook, they run in order and each sees the previous one's output. Two `afterCleanup` hooks turn `"start"` into `"start-a-b"`. Use `enforce: "pre"` or `enforce: "post"` to run first or last.
+Building a plugin allows you to modify what happens at each step of Freestyle's dictation pipeline. The SDK offers hooks like `afterTranscribe` and `beforeOutput` that lets you control the inputs and the outputs at each step of the pipeline. In those hooks you can write functions that can do anything as long as it runs properly in a node environment.
 
 ## Where plugins live
 

@@ -117,4 +117,42 @@ Options come from the `plugins` setting as `[specifier, options]`:
 ["@freestyle-voice/profanity-filter", { "preserveCase": true, "disableDefaults": false }]
 ```
 
+## The API bridge
+
+Your UI page is sandboxed. It can't touch the filesystem or reach the local server directly. Instead, Freestyle injects `window.freestyle`, a small pre-authenticated bridge. It's the only privileged surface a page gets.
+
+It does three things:
+
+- **`api(path, init?)`** calls a server route. The bearer token and loopback origin are handled for you, so use it instead of `fetch`. It returns a `FreestyleResponse` (`ok`, `status`, `headers`, `json()` / `text()` / `arrayBuffer()`).
+- **`invoke(channel, payload)`** runs a host action: `copy`, `toast`, or `navigate`.
+- **`serverUrl`** and **`token`** are there if you need the raw values.
+
+Always guard for the bridge first, since the page can be opened outside the host during development:
+
+```ts
+import type { FreestyleBridge } from "freestyle-voice";
+
+const bridge: FreestyleBridge | undefined = window.freestyle;
+if (!bridge) throw new Error("Host bridge unavailable.");
+
+// Read your plugin's data from its own middleware route.
+const res = await bridge.api("/api/plugins/freestyle-voice-profanity-filter/replacements");
+if (!res.ok) throw new Error(`server returned ${res.status}`);
+const data = await res.json();
+
+// POST works too. Send a Blob or ArrayBuffer, not FormData.
+await bridge.api("/api/transcribe", {
+  method: "POST",
+  headers: { "content-type": "audio/wav" },
+  body: audioBytes,
+});
+
+// Host actions.
+await bridge.invoke("copy", { text: "copied!" });
+await bridge.invoke("toast", { message: "Saved", variant: "success" });
+await bridge.invoke("navigate", { to: "/plugins" });
+```
+
+See the full shape in the [SDK reference](/sdk-reference#the-ui-bridge).
+
 Next: the full [SDK reference](/sdk-reference).

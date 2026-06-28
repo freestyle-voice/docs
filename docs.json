@@ -35,6 +35,11 @@
     "global": {
       "anchors": [
         {
+          "anchor": "Website",
+          "href": "https://freestylevoice.com",
+          "icon": "globe"
+        },
+        {
           "anchor": "GitHub",
           "href": "https://github.com/freestyle-voice/freestyle",
           "icon": "github"

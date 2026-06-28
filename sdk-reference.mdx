@@ -135,16 +135,26 @@ function transform(
 ): Handler<AfterCleanupInput, { text: string }>;
 ```
 
-## UI bridge
+## The UI bridge
 
-Inside a plugin page, `window.freestyle` is a pre-authenticated bridge plus host actions.
+Plugin pages are sandboxed: no filesystem, no direct network. Freestyle injects `window.freestyle` as the one privileged surface. Use it to call the server and trigger host actions. See [a worked example](/first-plugin#the-api-bridge) in the first-plugin guide.
 
 ```ts
 interface FreestyleBridge {
-  serverUrl: string;
-  token?: string;
+  readonly serverUrl: string;  // e.g. http://127.0.0.1:4649
+  readonly token?: string;     // bearer token, when configured
   api(path: string, init?: RequestInit): Promise<FreestyleResponse>;
   invoke<C extends keyof HostActions>(channel: C, payload: HostActions[C]): Promise<void>;
+}
+
+interface FreestyleResponse {
+  readonly ok: boolean;
+  readonly status: number;
+  readonly statusText: string;
+  readonly headers: Record<string, string>;
+  json<T = unknown>(): Promise<T>;
+  text(): Promise<string>;
+  arrayBuffer(): Promise<ArrayBuffer>;
 }
 
 interface HostActions {
@@ -154,7 +164,22 @@ interface HostActions {
 }
 ```
 
-`api()` returns a `FreestyleResponse` with `ok`, `status`, `headers`, and `json()` / `text()` / `arrayBuffer()`. Use it instead of `fetch` so auth and the loopback origin are handled.
+**`api(path, init?)`** appends `path` to `serverUrl`, attaches the token, and proxies the request through the host, so it resolves a `FreestyleResponse` rather than a native `Response`. Use it instead of `fetch`.
+
+```ts
+const res = await window.freestyle.api("/api/plugins/my-plugin/data");
+if (res.ok) console.log(await res.json());
+```
+
+**`invoke(channel, payload)`** asks the host to do something:
+
+```ts
+await window.freestyle.invoke("copy", { text: "copied!" });
+await window.freestyle.invoke("toast", { message: "Done", variant: "success" });
+await window.freestyle.invoke("navigate", { to: "/plugins" });
+```
+
+`window.freestyle` is only present inside a hosted plugin page, so guard for it (`if (!window.freestyle) ...`) before use.
 
 ## Manifest
 
