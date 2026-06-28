@@ -1,0 +1,120 @@
+---
+title: "Your first plugin"
+description: "Build a plugin by walking through the profanity filter example."
+---
+
+The `profanity-filter` plugin in the repo is a complete, small example. It swaps curse words for wholesome stand-ins as you dictate. Let's walk through it.
+
+A plugin has two halves: **plugin code** (`src/index.ts` → `dist/index.js`, bundled with `pkgroll`) and **optional UI pages** (`ui/` → `dist/ui/`, built with `vite`).
+
+```
+profanity-filter/
+├── package.json
+├── src/
+│   ├── index.ts          # the plugin (default export)
+│   └── replacements.ts   # the word list + matching logic
+└── ui/                   # the settings page (React)
+    └── src/App.tsx
+```
+
+## 1. The manifest
+
+Freestyle reads the `freestyle` field in `package.json`. `main` points at the built code, and each page in `contributes.pages` adds a screen inside the app.
+
+```json
+{
+  "name": "@freestyle-voice/profanity-filter",
+  "type": "module",
+  "main": "dist/index.js",
+  "files": ["dist"],
+  "freestyle": {
+    "icon": "Sparkles",
+    "contributes": {
+      "pages": [
+        { "id": "profanity-filter", "title": "Profanity Filter", "entry": "dist/ui/index.html" }
+      ]
+    }
+  },
+  "scripts": { "build": "pkgroll --minify && vite build" },
+  "dependencies": { "freestyle-voice": "workspace:*" }
+}
+```
+
+## 2. The plugin
+
+`src/index.ts` exports a factory that returns a `Plugin`. The factory takes user `options`, builds its word list, and returns three things: a `setup` hook, server `middleware`, and an `afterCleanup` hook that does the actual swapping.
+
+```ts
+import type { Plugin, PluginOptions } from "freestyle-voice";
+import { buildMatchers, clean, DEFAULT_REPLACEMENTS } from "./replacements.js";
+
+export default function profanityFilter(options?: PluginOptions): Plugin {
+  const opts = (options ?? {}) as { disableDefaults?: boolean; preserveCase?: boolean };
+  const preserveCase = opts.preserveCase !== false;
+  const map = { ...(opts.disableDefaults ? {} : DEFAULT_REPLACEMENTS) };
+  const matchers = buildMatchers(map);
+
+  return {
+    name: "@freestyle-voice/profanity-filter",
+
+    setup({ logger, mode }) {
+      logger.info(`ready on ${mode} (${matchers.length} substitutions)`);
+    },
+
+    afterCleanup(_input, output) {
+      output.text = clean(output.text, matchers, preserveCase);
+    },
+  };
+}
+```
+
+`afterCleanup` is the last text transform on the server, so it runs after cleanup and the dictionary. It mutates `output.text` in place.
+
+<Tip>
+  Need a one-liner instead? The `transform` helper wraps a plain string function into an `afterCleanup` hook:
+  ```ts
+  import { transform } from "freestyle-voice";
+  // afterCleanup: transform((text) => text.replace(/\s+$/, "")),
+  ```
+</Tip>
+
+## 3. Talk to the UI (optional)
+
+The plugin serves its word list to its settings page with Hono `middleware`:
+
+```ts
+const route = "/api/plugins/freestyle-voice-profanity-filter/replacements";
+
+const replacementsApi = async (c, next) => {
+  if (c.req.path !== route) return next();
+  return c.json({ preserveCase, replacements: entries });
+};
+
+// add to the returned plugin:  middleware: [replacementsApi],
+```
+
+The page fetches it through the bridge:
+
+```ts
+const res = await window.freestyle.api(route);
+const data = await res.json();
+```
+
+## 4. Build and install
+
+```bash
+pnpm install
+pnpm build
+```
+
+Copy the built package into the user-data directory under `plugins/freestyle-voice-profanity-filter/`, add its specifier to the `plugins` setting (or install via **Settings → Plugins**), then restart the app. Dictate a curse word and watch it get swapped.
+
+## Configure it
+
+Options come from the `plugins` setting as `[specifier, options]`:
+
+```json
+["@freestyle-voice/profanity-filter", { "preserveCase": true, "disableDefaults": false }]
+```
+
+Next: the full [SDK reference](/sdk-reference).

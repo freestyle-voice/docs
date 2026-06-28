@@ -1,0 +1,65 @@
+---
+title: "How plugins work"
+description: "The pipeline, the hooks, and where your code runs."
+---
+
+A plugin is a TypeScript package that taps into Freestyle's dictation pipeline. You can rewrite transcripts, tweak the AI cleanup, react to events, reroute output, and add pages inside the app.
+
+## Two processes
+
+- The **server** owns transcription, cleanup, settings, and the plugin database. Most hooks run here.
+- The **app** (the Electron client) owns audio capture, the UI, and delivering text to your window. A couple of hooks run here.
+
+You write one plugin object. Freestyle calls each hook in the right process.
+
+## The pipeline
+
+```
+User presses hotkey
+        │
+        ▼
+[APP]    Capture audio  ········· event: recordingStarted
+        │
+        ▼
+[SERVER] Speech-to-text ─► raw transcript
+        │                  ├─ afterTranscribe   (rewrite the raw text)
+        │                  └─ event: transcribed
+        ▼
+[SERVER] AI cleanup (optional)
+        │                  ├─ beforeCleanup     (shape the prompt + register)
+        │                  ├─ dictionary + LLM rewrite
+        │                  ├─ afterCleanup      (rewrite the final text)
+        │                  └─ event: cleaned
+        ▼
+[APP]    Deliver output
+        │                  ├─ beforeOutput      (rewrite, suppress, or reroute)
+        │                  └─ event: outputDelivered
+        ▼
+Text appears in your focused app
+```
+
+When several plugins share a hook, they run in order and each sees the previous one's output. Two `afterCleanup` hooks turn `"start"` into `"start-a-b"`. Use `enforce: "pre"` or `enforce: "post"` to run first or last.
+
+## Where plugins live
+
+Installed plugins sit in the user-data directory under `plugins/<slug>/`. Two settings control loading:
+
+- `plugins`: a JSON array of specifiers, or `[specifier, options]` tuples.
+- `disabled_plugins`: specifiers to skip.
+
+```json
+[
+  "@freestyle-voice/profanity-filter",
+  ["@freestyle-voice/plugin-audio-transcription", { "disableDefaults": true }]
+]
+```
+
+Most people manage these in **Settings → Plugins**.
+
+## Sandboxing
+
+- Each plugin's settings live under `plugin:<name>:<key>`, isolated from other plugins.
+- A throwing hook is caught and reported. It won't break the pipeline.
+- UI pages run in a sandboxed `freestyle-plugin://` origin with no direct filesystem or network access. They reach the server only through `window.freestyle`.
+
+Next: [build your first plugin](/first-plugin).
