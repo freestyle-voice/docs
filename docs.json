@@ -23,7 +23,7 @@
         ]
       },
       {
-        "group": "Developers",
+        "group": "Building plugins",
         "pages": [
           "development-setup",
           "how-plugins-work",
